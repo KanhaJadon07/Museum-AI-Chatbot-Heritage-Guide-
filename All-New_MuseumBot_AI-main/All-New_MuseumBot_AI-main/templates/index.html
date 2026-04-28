@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    
+    <title>MuseumBot | AI-Driven Ticketing Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Marcellus&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script id="museums-data" type="application/json">{{ museums | tojson | safe }}</script>
+    <script>
+        window.RZP_KEY_ID = "{{ rzp_key_id }}";
+        window.MUSEUMS_DATA = JSON.parse(document.getElementById('museums-data').textContent);
+        
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('themeIcon');
+            const isLight = body.classList.toggle('light-mode');
+            
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            icon.className = isLight ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                document.body.classList.add('light-mode');
+                const icon = document.getElementById('themeIcon');
+                if(icon) icon.className = 'fa-solid fa-sun';
+            }
+        });
+    </script>
+
+
+</head>
+<body>
+    <!-- TOP ANNOUNCEMENT BAR -->
+    <div class="top-announcement">
+        <div class="announcement-content">
+            <span><i class="fa-solid fa-bullhorn"></i> <strong>ALERT:</strong> New exhibition "Visions of the Mughal Era" is now open for bookings.</span>
+            <span><i class="fa-solid fa-clock"></i> <strong>HOURS:</strong> Museum hours extended until 8 PM this weekend.</span>
+            <span><i class="fa-solid fa-star"></i> <strong>SPECIAL:</strong> Get 20% off on Group Bookings of 10+ visitors.</span>
+        </div>
+    </div>
+
+    <!-- NAVIGATION -->
+    <nav id="navbar">
+        <a class="logo" href="/">Museum<span>Bot</span></a>
+        <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="#artifacts">Treasure of India</a></li>
+            <li><a href="#how">Important Things</a></li>
+            <li class="nav-dropdown">
+                <a href="javascript:void(0)">Museums <i class="fa-solid fa-chevron-down"></i></a>
+                <ul class="dropdown-menu">
+                    <li><a href="javascript:void(0)" onclick="discoverItem('delhi')">National Museum Delhi</a></li>
+                    <li><a href="javascript:void(0)" onclick="discoverItem('kolkata')">Indian Museum Kolkata</a></li>
+                    <li><a href="javascript:void(0)" onclick="discoverItem('mumbai')">CSMVS Mumbai</a></li>
+                    <li><a href="javascript:void(0)" onclick="discoverItem('hyderabad')">Salar Jung Hyderabad</a></li>
+                    <li><a href="javascript:void(0)" onclick="discoverItem('ahmedabad')">Science City Ahmedabad</a></li>
+
+                </ul>
+            </li>
+            <li>
+                <button id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()">
+                    <i id="themeIcon" class="fa-solid fa-moon"></i>
+                </button>
+            </li>
+ 
+            {% if logged_in %}
+            <li class="nav-user-info">
+                <span class="user-name"><i class="fa-solid fa-circle-user"></i> {{ username }}</span>
+                <a href="/my-bookings" class="nav-cta bookings-btn"><i class="fa-solid fa-ticket"></i> My Bookings</a>
+                <a href="/logout" class="nav-cta logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+            </li>
+            {% else %}
+            <li><a href="/login" class="nav-cta">Login / Register</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+
+    <!-- HERO SECTION -->
+    <header id="home" class="hero-section">
+        <div class="hero-content">
+            <div class="hero-badge reveal active">
+                <span class="badge-dot"></span>
+                SIH 1648 · NCSM · Ministry of Culture
+            </div>
+            <h1 class="reveal active">Experience <em>Ancient India</em></h1>
+            <p class="reveal active">An intelligent multilingual chatbot platform that handles ticket booking, show reservations, and visitor queries — eliminating queues across all NCSM museums.</p>
+            <div class="hero-actions reveal active">
+                <button class="cta-btn" onclick="openBooking()">🎫 Book Tickets Now</button>
+            </div>
+        </div>
+    </header>
+
+
+    <!-- ANNOUNCEMENTS TICKER / SECTION -->
+    <section class="announcement-bar">
+        <div class="announcement-track">
+            <span><i class="fa-solid fa-bullhorn"></i> <strong>LATEST:</strong> Special Exhibition on "Ancient Indian Astronomy" now open at National Science Centre Delhi.</span>
+            <span><i class="fa-solid fa-circle-info"></i> International Museum Day celebrations starting May 18th across all NCSM units.</span>
+            <span><i class="fa-solid fa-star"></i> New "Space Odyssey" show launched at Science City Ahmedabad.</span>
+        </div>
+    </section>
+
+    <section class="news-section">
+        <div class="section-header-row">
+            <div>
+                <span class="section-tag reveal">Stay Updated</span>
+                <h2 class="reveal">Latest <em>Announcements</em></h2>
+            </div>
+            <div class="news-filter-box reveal">
+                <label for="newsMuseumFilter"><i class="fa-solid fa-filter"></i> Filter by Museum:</label>
+                <select id="newsMuseumFilter" onchange="filterNews()">
+                    <option value="all">All Museums</option>
+                    {% for museum in museums %}
+                    <option value="{{ museum.id }}">{{ museum.title.split(',')[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="news-grid" id="newsGrid">
+            {% for news in announcements %}
+            <div class="news-card reveal" data-museum-id="{{ news.museum_id or 'all' }}">
+                <div class="news-header">
+                    <div class="news-date">{{ news.date_published }}</div>
+                    {% if news.museum_id %}
+                        {% for museum in museums %}
+                            {% if museum.id == news.museum_id %}
+                                <div class="news-museum-badge">{{ museum.title.split(',')[0] }}</div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="news-museum-badge global">NCSM Global</div>
+                    {% endif %}
+                </div>
+                <h3>{{ news.title }}</h3>
+                <p>{{ news.description }}</p>
+                <div class="news-footer">
+                    <a href="{{ news.redirect_url }}" target="_blank" class="news-link">Read More <i class="fa-solid fa-up-right-from-square"></i></a>
+                    {% if news.museum_id %}
+                        {% for museum in museums %}
+                            {% if museum.id == news.museum_id %}
+                                <div class="news-price-tag">Entry: ₹{{ museum.price }}</div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <script>
+            function filterNews() {
+                const filterValue = document.getElementById('newsMuseumFilter').value;
+                const cards = document.querySelectorAll('.news-card');
+                
+                cards.forEach(card => {
+                    const museumId = card.getAttribute('data-museum-id');
+                    if (filterValue === 'all' || museumId === filterValue || museumId === 'all') {
+                        card.style.display = 'flex';
+                        card.classList.add('reveal');
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+        </script>
+    </section>
+    
+    <!-- EXPLORE HERITAGE SITES -->
+
+    <section class="heritage-section">
+        <span class="section-tag reveal">Premier Destinations</span>
+        <h2 class="reveal">Explore <em>Heritage Sites</em></h2>
+        <div class="heritage-grid">
+            <div class="heritage-card reveal" onclick="discoverItem('delhi')">
+                <div class="heritage-card-badge">New Delhi</div>
+                <img src="/static/images/national_museum_delhi.png" alt="National Museum" class="heritage-card-img">
+                <div class="heritage-card-content">
+                    <h3>National Museum</h3>
+                    <p>Home to over 200,000 works of art spanning 5,000 years of Indian cultural history.</p>
+                </div>
+            </div>
+            <div class="heritage-card reveal" onclick="discoverItem('kolkata')">
+                <div class="heritage-card-badge">Kolkata</div>
+                <img src="/static/images/indian_museum_kolkata.png" alt="Indian Museum" class="heritage-card-img">
+                <div class="heritage-card-content">
+                    <h3>Indian Museum</h3>
+                    <p>The largest and oldest multipurpose museum in the Asia-Pacific region, established in 1814.</p>
+                </div>
+            </div>
+            <div class="heritage-card reveal" onclick="discoverItem('hyderabad')">
+                <div class="heritage-card-badge">Hyderabad</div>
+                <img src="/static/images/salar_jung_museum.png" alt="Salar Jung" class="heritage-card-img">
+                <div class="heritage-card-content">
+                    <h3>Salar Jung Museum</h3>
+                    <p>One of the largest individual collections in the world, featuring artifacts from across the globe.</p>
+                </div>
+            </div>
+            <div class="heritage-card reveal" onclick="discoverItem('mumbai')">
+                <div class="heritage-card-badge">Mumbai</div>
+                <img src="/static/images/csmvs_mumbai.png" alt="CSMVS" class="heritage-card-img">
+                <div class="heritage-card-content">
+                    <h3>CSMVS Mumbai</h3>
+                    <p>A premier heritage landmark known for its Indo-Saracenic architecture and world-class exhibitions.</p>
+                </div>
+            </div>
+            <div class="heritage-card reveal" onclick="discoverItem('ahmedabad')">
+                <div class="heritage-card-badge">Ahmedabad</div>
+                <img src="/static/images/science_city_ahmedabad.png" alt="Science City Ahmedabad" class="heritage-card-img">
+                <div class="heritage-card-content">
+                    <h3>Science City</h3>
+                    <p>An immersive scientific frontier featuring the Robotics Gallery, Space Odyssey, and more.</p>
+                </div>
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- CINEMATIC SHOWCASE -->
+    <section class="showcase-section">
+        <span class="section-tag reveal">Cinematic Experience</span>
+        <h2 class="reveal">A Journey Through <em>History</em></h2>
+        <div class="video-frame reveal">
+            <div class="video-container">
+                <iframe width="560" height="315" src="https://www.youtube.com/embed/WRRfvmBv9ec?autoplay=1&mute=1&loop=1&playlist=WRRfvmBv9ec&end=60" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            </div>
+        </div>
+    </section>
+
+    <!-- ARTIFACT GALLERY -->
+    <section id="artifacts" class="artifact-section">
+        <span class="section-tag reveal">Visual Legacy</span>
+        <h2 class="reveal">Treasurers of India: <em>The Artifact Collection</em></h2>
+        <div class="artifact-grid">
+            <div class="artifact-card reveal" onclick="discoverItem('lion_capital')">
+                <div class="artifact-img-box">
+                    <img src="/static/images/ashoka_pillar.png" alt="Ashoka Pillar">
+                </div>
+                <div class="artifact-info">
+                    <h3>The Lion Capital</h3>
+                    <span class="museum-label">Sarnath Museum, Varanasi</span>
+                </div>
+            </div>
+            <div class="artifact-card reveal" onclick="discoverItem('dancing_girl')">
+                <div class="artifact-img-box">
+                    <img src="/static/images/dancing_girl.png" alt="Dancing Girl">
+                </div>
+                <div class="artifact-info">
+                    <h3>Dancing Girl</h3>
+                    <span class="museum-label">National Museum, New Delhi</span>
+                </div>
+            </div>
+            <div class="artifact-card reveal" onclick="discoverItem('relics')">
+                <div class="artifact-img-box">
+                    <img src="/static/images/harappan_gallery.png" alt="Harappan Relics">
+                </div>
+                <div class="artifact-info">
+                    <h3>Civilization Relics</h3>
+                    <span class="museum-label">National Museum, New Delhi</span>
+                </div>
+            </div>
+            <div class="artifact-card reveal" onclick="discoverItem('manuscripts')">
+                <div class="artifact-img-box">
+                    <img src="/static/images/manuscript_gallery.png" alt="Ancient Manuscripts">
+                </div>
+                <div class="artifact-info">
+                    <h3>Ancient Manuscripts</h3>
+                    <span class="museum-label">Indian Museum, Kolkata</span>
+                </div>
+            </div>
+            <div class="artifact-card reveal" onclick="discoverItem('armoury')">
+                <div class="artifact-img-box">
+                    <img src="/static/images/arms_gallery.png" alt="Imperial Arms">
+                </div>
+                <div class="artifact-info">
+                    <h3>Imperial Armoury</h3>
+                    <span class="museum-label">Salar Jung Museum, Hyderabad</span>
+                </div>
+            </div>
+            <div class="artifact-card reveal" onclick="discoverItem('tanjore')">
+                <div class="artifact-img-box">
+                    <img src="/static/images/tanjore_painting.png" alt="Tanjore Art">
+                </div>
+                <div class="artifact-info">
+                    <h3>Tanjore Art</h3>
+                    <span class="museum-label">CSMVS Mumbai Collection</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ESSENTIAL VISITOR GUIDE -->
+    <section id="how" class="visitor-guide">
+        <span class="section-tag reveal">Important Things</span>
+        <h2 class="reveal">Essential <em>Guidelines &amp; Schedule</em></h2>
+        <div class="guide-grid">
+            <div class="guide-item reveal">
+                <div class="live-status-container">
+                    <i class="fa-solid fa-clock"></i>
+                    <div id="museumStatusBadge" class="status-badge-live">Checking Status...</div>
+                </div>
+                <h3>Schedule Explorer</h3>
+                
+                <div class="museum-picker-mini">
+                    <select id="scheduleMuseumSelect" onchange="updateMuseumStatus()">
+                        {% for museum in museums %}
+                        <option value="{{ museum.id }}" 
+                                data-open="{{ museum.opening_time }}" 
+                                data-close="{{ museum.closing_time }}"
+                                data-holidays="{{ museum.holidays }}">
+                            {{ museum.title.split(',')[0] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <ul class="hours-list">
+                    <li><span class="day-label">Open:</span> <span id="displayOpen">09:30 AM</span> - <span id="displayClose">06:00 PM</span></li>
+                    <li id="closingCountdown" style="color: var(--primary-gold); font-weight: 600; font-size: 0.8rem; margin: 5px 0 10px;"></li>
+                    <li><span class="day-label">Holidays:</span> <span id="displayHolidays">Holi & Diwali</span></li>
+                </ul>
+            </div>
+
+            <script>
+                function updateMuseumStatus() {
+                    const select = document.getElementById('scheduleMuseumSelect');
+                    const selected = select.options[select.selectedIndex];
+                    
+                    const openStr = selected.getAttribute('data-open');
+                    const closeStr = selected.getAttribute('data-close');
+                    const holidays = selected.getAttribute('data-holidays');
+                    
+                    document.getElementById('displayOpen').innerText = openStr + " AM";
+                    document.getElementById('displayClose').innerText = (parseInt(closeStr.split(':')[0]) > 12 ? (parseInt(closeStr.split(':')[0]) - 12) + ":" + closeStr.split(':')[1] + " PM" : closeStr + " AM");
+                    document.getElementById('displayHolidays').innerText = holidays;
+
+                    const now = new Date();
+                    const hours = now.getHours();
+                    const minutes = now.getMinutes();
+                    const currentTime = hours + minutes / 60;
+                    
+                    const openTime = parseFloat(openStr.split(':')[0]) + parseFloat(openStr.split(':')[1])/60;
+                    const closeTime = parseFloat(closeStr.split(':')[0]) + parseFloat(closeStr.split(':')[1])/60;
+                    
+                    const badge = document.getElementById('museumStatusBadge');
+                    const countdown = document.getElementById('closingCountdown');
+                    
+                    // Simple Holiday Check (e.g. "Monday")
+                    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const currentDay = days[now.getDay()];
+                    const isHoliday = holidays.toLowerCase().includes(currentDay.toLowerCase());
+
+                    if (isHoliday) {
+                        badge.innerText = "Closed (Holiday)";
+                        badge.className = "status-badge-live status-closed";
+                        countdown.innerText = `Closed every ${currentDay}`;
+                    } else if (currentTime >= openTime && currentTime < closeTime) {
+                        badge.innerText = "Currently Open";
+                        badge.className = "status-badge-live status-open";
+                        
+                        const closeHour = parseInt(closeStr.split(':')[0]);
+                        const closeMin = parseInt(closeStr.split(':')[1]);
+                        const diffMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), closeHour, closeMin, 0) - now;
+                        const diffHrs = Math.floor(diffMs / 3600000);
+                        const diffMins = Math.floor((diffMs % 3600000) / 60000);
+                        countdown.innerText = `Closes in ${diffHrs}h ${diffMins}m`;
+                    } else {
+                        badge.innerText = "Currently Closed";
+                        badge.className = "status-badge-live status-closed";
+                        countdown.innerText = `Opens at ${openStr} AM`;
+                    }
+                }
+                
+                setInterval(updateMuseumStatus, 60000);
+                window.addEventListener('load', updateMuseumStatus);
+            </script>
+
+
+            <div class="guide-item reveal">
+                <i class="fa-solid fa-clipboard-list"></i>
+                <h3>Visitor Policy</h3>
+                <ul>
+                    <li>No food/beverages inside galleries</li>
+                    <li>Arrive 15 mins before scheduled shows</li>
+                    <li>Cloakroom available for large bags</li>
+                    <li>Supervised exploration for children</li>
+                </ul>
+            </div>
+            <div class="guide-item reveal">
+                <i class="fa-solid fa-school"></i>
+                <h3>Group Bookings</h3>
+                <ul>
+                    <li>Concessional rates for school groups</li>
+                    <li>Official institutional letter required</li>
+                    <li>Free entry for 1 escort per 10 students</li>
+                    <li>Book 48 hours in advance via Chatbot</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+
+
+
+
+
+
+    <!-- FEATURES -->
+    <section id="features">
+        <span class="section-tag reveal">Core Capabilities</span>
+        <h2 class="reveal">Everything a <em>visitor needs</em></h2>
+        <div class="feature-grid">
+            <div class="feature-card reveal">
+                <div class="feature-icon">🎫</div>
+                <h3>Smart Ticket Booking</h3>
+                <p>Book gate entry, exhibitions, planetarium shows, and guided tours through a single conversational interface. Instant QR code delivery.</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="feature-icon">🌐</div>
+                <h3>Multilingual Support</h3>
+                <p>Converse in Hindi, Tamil, Bengali, Telugu, Marathi, and 6 more languages. Our chatbot auto-detects your language.</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="feature-icon">💳</div>
+                <h3>Integrated Payments</h3>
+                <p>Pay via UPI, Razorpay, debit/credit cards, or net banking. Fully PCI-DSS compliant with zero human intervention.</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="feature-icon">🤖</div>
+                <h3>AI Helpdesk</h3>
+                <p>Beyond tickets — the bot answers exhibit queries, directions, timings, and handles complex issues seamlessly.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- PLATFORM EFFICIENCY STATS -->
+    <section id="impact" style="background: var(--bg-surface); border-top: 1px solid var(--border-gold);">
+        <span class="section-tag reveal">Platform Efficiency</span>
+        <h2 class="reveal" style="margin-bottom: 60px;">Performance <em>Metrics</em></h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 30px;">
+            <div class="stat-card reveal">
+                <div class="stat-num">0</div>
+                <div class="stat-label">Queue wait time</div>
+            </div>
+            <div class="stat-card reveal">
+                <div class="stat-num">10+</div>
+                <div class="stat-label">Languages supported</div>
+            </div>
+            <div class="stat-card reveal">
+                <div class="stat-num">24/7</div>
+                <div class="stat-label">Booking availability</div>
+            </div>
+            <div class="stat-card reveal">
+                <div class="stat-num">100%</div>
+                <div class="stat-label">Automated ticketing</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="journey" class="visitor-journey">
+        <span class="section-tag reveal">Visitor Journey</span>
+        <h2 class="reveal">Book in <em>4 steps</em></h2>
+        
+        <div class="journey-container">
+            <div class="journey-line"></div>
+            
+            <div class="journey-step reveal">
+                <div class="step-badge">
+                    <i class="fa-solid fa-comments"></i>
+                    <span class="step-count">1</span>
+                </div>
+                <h3>Establish Contact</h3>
+                <p>Launch the booking portal or chat with our Virtual Curator.</p>
+            </div>
+
+            <div class="journey-step reveal">
+                <div class="step-badge">
+                    <i class="fa-solid fa-calendar-check"></i>
+                    <span class="step-count">2</span>
+                </div>
+                <h3>Personalize Visit</h3>
+                <p>Choose your museum, desired date, and number of guests.</p>
+            </div>
+
+            <div class="journey-step reveal">
+                <div class="step-badge">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span class="step-count">3</span>
+                </div>
+                <h3>Secure Ledger</h3>
+                <p>Finalize your contribution via our secure multi-method gateway.</p>
+            </div>
+
+            <div class="journey-step reveal">
+                <div class="step-badge">
+                    <i class="fa-solid fa-ticket-simple"></i>
+                    <span class="step-count">4</span>
+                </div>
+                <h3>Enter Gallery</h3>
+                <p>Receive your digital QR code instantly for zero-queue entry.</p>
+            </div>
+        </div>
+    </section>
+
+
+
+
+
+    <!-- CHAT WIDGET -->
+    <div class="chat-widget" id="chatWidget" style="display: none;">
+        <div class="chat-header">
+            <div class="chat-title">
+                <div class="virtual-curator-avatar">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#e2c28d;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#c5a059;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#8b6d31;stop-opacity:1" />
+                            </linearGradient>
+                            <filter id="goldGlow">
+                                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        <circle cx="20" cy="20" r="18" stroke="rgba(197, 160, 89, 0.4)" stroke-width="0.5" />
+                        <g fill="url(#goldGradient)" filter="url(#goldGlow)">
+                            <path d="M6 15 L20 4 L34 15 H6Z" />
+                            <rect x="9" y="17" width="2" height="14" rx="0.5" />
+                            <rect x="16" y="17" width="2" height="14" rx="0.5" />
+                            <rect x="22" y="17" width="2" height="14" rx="0.5" />
+                            <rect x="29" y="17" width="2" height="14" rx="0.5" />
+                            <rect x="6" y="31" width="28" height="3" rx="1" />
+                        </g>
+                    </svg>
+                </div>
+                <div>
+                    <strong>Virtual Curator</strong>
+                    <div class="status"><span class="status-dot"></span> Online</div>
+                </div>
+            </div>
+            <button class="close-chat" onclick="toggleChat()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="chat-body" id="chatBody">
+            <div class="message bot-message">Greetings, <b>{{ username if logged_in else 'Guest' }}</b>. I am here to answer your queries and assist with "tickets". How may I help you?</div>
+        </div>
+        <div class="chat-typing" id="chatTyping" style="display: none; padding: 0 20px;">
+            <div class="typing-indicator">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+            </div>
+        </div>
+        <div class="quick-actions" id="quickActions">
+            <button class="quick-btn" onclick="quickAction('Book Tickets')">🎫 Book Tickets</button>
+            <button class="quick-btn" onclick="quickAction('Museum Hours')">🕒 Hours</button>
+            <button class="quick-btn" onclick="quickAction('Parking')">🚗 Parking</button>
+            <button class="quick-btn" onclick="window.location.href='/my-bookings'">📜 History</button>
+        </div>
+        <div class="chat-input-area">
+
+            <input type="text" id="chatInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <!-- BOOKING MODAL -->
+    <div class="modal-overlay" id="bookingModal" onclick="handleOverlayClick(event)">
+        <div class="modal" id="modalBox">
+            <div class="modal-layout">
+                <!-- Main Form Area -->
+                <div class="modal-main">
+                    <div class="modal-header">
+                        <h3><i class="fa-solid fa-ticket gold-text"></i> Reserve Admission</h3>
+                        <button class="modal-close" onclick="closeBooking()"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    
+                    <div class="progress-container">
+                        <div class="prog-bar-new">
+                            <div class="prog-dot active" id="pd1" data-label="Venue"></div>
+                            <div class="prog-dot" id="pd2" data-label="Tickets"></div>
+                            <div class="prog-dot" id="pd3" data-label="Checkout"></div>
+                            <div class="prog-dot" id="pd4" data-label="Receipt"></div>
+                        </div>
+                    </div>
+
+                    <!-- STEP 1 -->
+                    <div class="step-panel active" id="step1">
+                        <div class="form-group">
+                            <label class="form-label">Destination Museum Site</label>
+                            <div class="form-input-wrapper">
+                                <i class="fa-solid fa-building-columns form-input-icon"></i>
+                                <select class="form-select" id="museumSelect" onchange="onMuseumChange()">
+                                    <option value="">Select a Heritage Site…</option>
+                                    {% for m in museums %}
+                                    <option value="{{ m.id }}">{{ m.title }}</option>
+                                    {% endfor %}
+                                </select>
+
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Preferred Date</label>
+                                <div class="form-input-wrapper">
+                                    <i class="fa-solid fa-calendar-alt form-input-icon"></i>
+                                    <input type="date" class="form-input" id="visitDate" onchange="updateSummary()" onclick="this.showPicker()" style="color-scheme: dark;">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Lead Visitor / Group Name</label>
+                                <div class="form-input-wrapper">
+                                    <i class="fa-solid fa-user-check form-input-icon"></i>
+                                    <input type="text" class="form-input" id="visitorName" placeholder="Name or Organization" value="{{ username if logged_in else '' }}" oninput="updateSummary()">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-new">
+                            <button class="cta-btn secondary" onclick="closeBooking()">Cancel Access</button>
+                            <button class="cta-btn" onclick="goStep(2)">Proceed to Selection <i class="fa-solid fa-arrow-right"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 2 -->
+                    <div class="step-panel" id="step2">
+                        <label class="form-label">Ticket Tier</label>
+                        <div class="ticket-grid-new">
+                            <div class="ticket-card-mini selected" id="tierAdult" onclick="selectTicket(this, 0, 'Adult')">
+                                <div class="ticket-badge">Standard</div>
+                                <span class="ticket-price-val" id="priceAdult">₹---</span>
+                                <span class="ticket-tier-name">Adult Member</span>
+                            </div>
+                            <div class="ticket-card-mini" id="tierStudent" onclick="selectTicket(this, 0, 'Student')">
+                                <div class="ticket-badge">Discounted</div>
+                                <span class="ticket-price-val" id="priceStudent">₹---</span>
+                                <span class="ticket-tier-name">Student / Child</span>
+                            </div>
+                            <div class="ticket-card-mini" id="tierGroup" onclick="selectTicket(this, 0, 'Group')">
+                                <div class="ticket-badge">5+ Group</div>
+                                <span class="ticket-price-val" id="priceGroup">₹---</span>
+                                <span class="ticket-tier-name">Group Booking</span>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 30px;">
+                            <label class="form-label">Member Count</label>
+                            <div class="qty-selector-new">
+                                <button onclick="changeQty(-1)"><i class="fa-solid fa-minus"></i></button>
+                                <input type="number" id="qtyVal" value="1" min="1" onchange="manualQty()" class="qty-input-modern">
+                                <button onclick="changeQty(1)"><i class="fa-solid fa-plus"></i></button>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label class="form-label">Additional Names <span style="color:#d4af37;">(Required for Group/Student, Use Commas)</span></label>
+                            <div class="form-input-wrapper">
+                                <i class="fa-solid fa-users form-input-icon"></i>
+                                <textarea class="form-input" id="additionalGuests" placeholder="E.g. Alice, Bob, Charlie" style="resize: vertical; min-height: 50px; font-family: inherit;" oninput="autoUpdateQty()"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer-new">
+                            <button class="cta-btn secondary" onclick="goStep(1)"><i class="fa-solid fa-arrow-left"></i> Venue</button>
+                            <button class="cta-btn" onclick="goStep(3)">Checkout <i class="fa-solid fa-arrow-right"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3 -->
+                    <div class="step-panel" id="step3">
+                        <div class="payment-selection">
+                            <div class="pay-option selected" onclick="selectPayment('upi', this)">
+                                <i class="fa-solid fa-mobile-screen-button"></i>
+                                <span>UPI Transfer</span>
+                            </div>
+                            <div class="pay-option" onclick="selectPayment('card', this)">
+                                <i class="fa-regular fa-credit-card"></i>
+                                <span>Credit / Debit</span>
+                            </div>
+                        </div>
+                        <div class="payment-visual" id="payUPI">
+                            <div class="qr-container-new">
+                                <div id="qrPlaceholder" style="width:150px; height:150px; display:flex; align-items:center; justify-content:center; background:#11111d; border:2px dashed var(--border-gold); border-radius:10px;">
+                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary-gold);"></i>
+                                </div>
+                                <img id="dynamicQR" src="" alt="Dynamic UPI Scanner" style="display:none; width:150px; height:150px; border-radius:10px; border:2px solid var(--primary-gold);">
+                                <span class="qr-scan-label" id="payStatusLabel">Generating QR...</span>
+                                <div id="payStatusSub" style="margin-top: 5px; font-size: 0.8rem; color: var(--primary-gold); font-weight: bold; display:none;">
+                                    <i class="fa-solid fa-circle-notch fa-spin"></i> Awaiting Payment...
+                                </div>
+                                <div style="margin-top: 15px; width: 100%; border-top: 1px solid #333; padding-top: 15px;">
+                                    <p style="font-size: 0.85rem; margin-bottom: 5px;">Amount to Pay: <strong style="color: var(--primary-gold);">₹<span id="qrAmount">0.00</span></strong></p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted);">Scan this QR with GPay, PhonePe or Paytm to complete your booking instantly.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="payment-visual" id="payCard" style="display: none; padding: 10px;">
+                            <div class="card-form-new" style="display: flex; flex-direction: column; gap: 15px;">
+                                <input type="text" id="cardNumberInput" class="form-input" placeholder="Card Number (16 Digits)" maxlength="16" style="width: 100%; border: 1px solid var(--border-gold); background: #1a1a2e; padding: 12px; color: white; border-radius: 8px;">
+                                <div style="display: flex; gap: 15px;">
+                                    <input type="text" id="cardExpiryInput" class="form-input" placeholder="MM/YY" maxlength="5" style="width: 50%; border: 1px solid var(--border-gold); background: #1a1a2e; padding: 12px; color: white; border-radius: 8px;">
+                                    <input type="text" id="cardCvvInput" class="form-input" placeholder="CVV" maxlength="3" style="width: 50%; border: 1px solid var(--border-gold); background: #1a1a2e; padding: 12px; color: white; border-radius: 8px;">
+                                </div>
+                                <input type="text" id="cardNameInput" class="form-input" placeholder="Cardholder Name" style="width: 100%; border: 1px solid var(--border-gold); background: #1a1a2e; padding: 12px; color: white; border-radius: 8px;">
+                            </div>
+                        </div>
+                        <div class="modal-footer-new">
+                            <button class="cta-btn secondary" onclick="goStep(2)"><i class="fa-solid fa-arrow-left"></i> Selection</button>
+                            <button class="cta-btn" id="payBtn" onclick="processManualPayment()">Complete Payment <i class="fa-solid fa-check"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 4 -->
+                    <div class="step-panel" id="step4">
+                        <div class="success-header">
+                            <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
+                            <h3>Transaction Complete</h3>
+                            <p>Your digital admission is now active.</p>
+                        </div>
+                        <div class="e-ticket-modern">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                                <div class="ticket-side">
+                                    <div class="ticket-label">Member</div>
+                                    <div class="ticket-value" id="ticketVisitorText">Visitor</div>
+                                </div>
+                                <div class="ticket-side" style="text-align: right;">
+                                    <div class="ticket-label">Reference</div>
+                                    <div class="ticket-value gold-text" id="ticketNum">########</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <div class="ticket-side">
+                                    <div class="ticket-label">Date of Visit</div>
+                                    <div class="ticket-value" id="ticketDateText">--</div>
+                                </div>
+                                <div class="ticket-side" style="text-align: right;">
+                                    <div class="ticket-label">Payment Mode</div>
+                                    <div class="ticket-value" id="ticketPayModeText">UPI</div>
+                                </div>
+                            </div>
+                            <div class="ticket-divider"></div>
+                            <div class="ticket-bottom">
+                                <div id="ticketMuseumText">Museum Heritage Site</div>
+                                <div class="ticket-footer">Presented by MuseumBot SIH Team</div>
+                            </div>
+                        </div>
+                        <div class="modal-footer-new">
+                            <button class="cta-btn secondary" style="width: 50%" onclick="closeBooking()">Close</button>
+                            <button class="cta-btn" style="width: 50%" onclick="downloadTicket()">Download E-Ticket <i class="fa-solid fa-download"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Sidebar -->
+                <div class="modal-summary">
+                    <h4>Booking Summary</h4>
+                    <div class="summary-list" id="summaryList">
+                        <div class="summary-item">
+                            <span>Museum</span>
+                            <span id="sumMuseum">--</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Date</span>
+                            <span id="sumDate">--</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Guests</span>
+                            <span id="sumQty">0</span>
+                        </div>
+                    </div>
+                    <div class="summary-total">
+                        <span>Total Due</span>
+                        <span id="sumTotal">₹0.00</span>
+                    </div>
+                    <div class="summary-secure">
+                        <i class="fa-solid fa-shield-halved"></i> 256-bit SSL Encrypted
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOGGLE BUTTON -->
+    <div class="chat-toggle-container">
+        <div class="chat-hint">How may I help you?</div>
+        <button class="chat-toggle-btn" id="chatToggleBtn" onclick="toggleChat()">
+            <i class="fa-solid fa-landmark"></i>
+        </button>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="heritage-footer">
+        <div class="footer-container">
+            <div class="footer-col about-col">
+                <a class="logo" href="/">Museum<span>Bot</span></a>
+                <p>NCSM's digital gateway to India's cultural and scientific heritage. Empowering visitors through seamless AI curation and smart ticketing.</p>
+                <div class="social-links">
+                    <a href="https://www.instagram.com/lpuuniversity/" target="_blank"><i class="fa-brands fa-instagram"></i></a>
+                    <a href="https://twitter.com/lpuuniversity" target="_blank"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="https://www.facebook.com/LPUUniversity/" target="_blank"><i class="fa-brands fa-facebook"></i></a>
+                    <a href="https://www.linkedin.com/school/lovely-professional-university/" target="_blank"><i class="fa-brands fa-linkedin"></i></a>
+                </div>
+            </div>
+
+
+            <div class="footer-col">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#artifacts">The Collections</a></li>
+                    <li><a href="#how">Visitor Guide</a></li>
+                    <li><a href="/my-bookings">My Bookings</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-col">
+                <h3>Museums</h3>
+                <ul>
+                    <li><a href="#">National Museum</a></li>
+                    <li><a href="#">Indian Museum</a></li>
+                    <li><a href="#">Salar Jung</a></li>
+                    <li><a href="#">CSMVS Mumbai</a></li>
+                    <li><a href="#">Science City Ahmedabad</a></li>
+                </ul>
+            </div>
+
+
+            <div class="footer-col contact-col">
+                <h3>Contact Us</h3>
+                <p><i class="fa-solid fa-location-dot"></i> Lovely Professional University, Jalandhar - Delhi, G.T. Road, Phagwara, Punjab</p>
+                <p><i class="fa-solid fa-envelope"></i> info@lpu.co.in</p>
+                <p><i class="fa-solid fa-phone"></i> +91 1824 404404</p>
+            </div>
+
+
+        </div>
+
+        <div class="footer-bottom">
+            <div class="footer-bottom-content">
+                <p>&copy; 2026 National Council of Science Museums. All Rights Reserved.</p>
+                <div class="footer-legal">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                    <a href="#">Accessibility</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+
+
+    <!-- DISCOVERY OVERLAY (Articles) -->
+    <div class="discovery-overlay" id="discoveryOverlay" onclick="handleOverlayClick(event)">
+        <div class="discovery-window">
+            <button class="discovery-close" onclick="closeDiscovery()">&times;</button>
+            <div id="discoveryContent">
+                <!-- Data-driven content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="/static/main.js"></script>
+</body>
+</html>
